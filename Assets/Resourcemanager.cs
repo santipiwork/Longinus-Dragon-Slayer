@@ -4,18 +4,18 @@ using UnityEngine.InputSystem;
 
 public class ResourceManager : MonoBehaviour
 {
-    // Resource storage (assignment requirement)
-    public Dictionary<string, float> resources = new Dictionary<string, float>();
+    // Resource storage using enum instead of strings
+    public Dictionary<ResourceType, float> resources = new Dictionary<ResourceType, float>();
 
-    // Inspector values (to view resources while playing)
+    // Inspector display values
     public float souls;
     public float gold;
 
-    // Passive income variables
+    // Passive income
     public float passiveSouls = 0;
     public float passiveGold = 0.5f;
 
-    // Upgrade system (assignment requirement)
+    // Upgrade system
     public List<Upgrade> upgrades = new List<Upgrade>();
 
     float timer = 0f;
@@ -23,51 +23,55 @@ public class ResourceManager : MonoBehaviour
     void Start()
     {
         // Initialize resources
-        resources["Souls"] = 0;
-        resources["Gold"] = 0;
+        resources[ResourceType.Souls] = 0;
+        resources[ResourceType.Gold] = 0;
 
         // Create upgrades
-        upgrades.Add(new Upgrade("Soul Echo", 10, 1));
-        upgrades.Add(new Upgrade("Sword Spirit", 25, 2));
+        upgrades.Add(new Upgrade(
+            "Soul Echo",
+            10,
+            1,
+            new UpgradeEffect(ResourceType.Souls, 1)
+        ));
+
+        upgrades.Add(new Upgrade(
+            "Sword Spirit",
+            25,
+            1,
+            new UpgradeEffect(ResourceType.Gold, 1)
+        ));
 
         Debug.Log("Resource Manager Started");
     }
 
     void Update()
     {
-        // Manual click attack (press C)
+        // Click anywhere to gain Souls
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
-            AddResource("Souls", 1);
+            AddResource(ResourceType.Souls, 1);
         }
 
-        // Buy first upgrade (press U)
-        if (Input.GetKeyDown(KeyCode.U))
-        {
-            BuyUpgrade(0);
-        }
-
-        // Passive income timer (1 second)
+        // Passive income timer
         timer += Time.deltaTime;
 
         if (timer >= 1f)
         {
-            AddResource("Souls", passiveSouls);
-            AddResource("Gold", passiveGold);
+            AddResource(ResourceType.Souls, passiveSouls);
+            AddResource(ResourceType.Gold, passiveGold);
             timer = 0f;
         }
 
-        // Sync values so they appear in Inspector
-        souls = resources["Souls"];
-        gold = resources["Gold"];
+        // Sync values to Inspector (no decimals)
+        souls = Mathf.FloorToInt(resources[ResourceType.Souls]);
+        gold = Mathf.FloorToInt(resources[ResourceType.Gold]);
     }
 
-    public void AddResource(string type, float amount)
+    public void AddResource(ResourceType type, float amount)
     {
         if (resources.ContainsKey(type))
         {
             resources[type] += amount;
-
             Debug.Log(type + " = " + resources[type]);
         }
     }
@@ -79,40 +83,33 @@ public class ResourceManager : MonoBehaviour
         Upgrade u = upgrades[index];
         float cost = u.GetCost();
 
-        if (resources["Souls"] >= cost)
+        if (resources[u.costResource] >= cost)
         {
-            resources["Souls"] -= cost;
+            resources[u.costResource] -= cost;
 
-            passiveSouls += u.passiveGain;
+            ApplyUpgradeEffect(u);
+
             u.level++;
+            u.state = UpgradeState.Purchased;
 
-            Debug.Log("Purchased " + u.name + " Level " + u.level);
+            Debug.Log("Purchased " + u.name);
         }
         else
         {
-            Debug.Log("Not enough Souls");
+            Debug.Log("Not enough " + u.costResource);
         }
     }
-}
 
-[System.Serializable]
-public class Upgrade
-{
-    public string name;
-    public float baseCost;
-    public float passiveGain;
-    public int level;
-
-    public Upgrade(string n, float cost, float gain)
+    void ApplyUpgradeEffect(Upgrade upgrade)
     {
-        name = n;
-        baseCost = cost;
-        passiveGain = gain;
-        level = 0;
-    }
+        if (upgrade.effect.targetResource == ResourceType.Souls)
+        {
+            passiveSouls += upgrade.effect.multiplier;
+        }
 
-    public float GetCost()
-    {
-        return baseCost * Mathf.Pow(1.5f, level);
+        if (upgrade.effect.targetResource == ResourceType.Gold)
+        {
+            passiveGold += upgrade.effect.multiplier;
+        }
     }
 }
