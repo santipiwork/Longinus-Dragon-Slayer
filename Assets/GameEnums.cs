@@ -8,5 +8,8 @@ public enum UpgradeState
 public enum ResourceType
 {
     Souls,
-    Gold
+    Gold,
+    CombatPower,
+    TrueSoul,
+    Lives
 }

@@ -1,115 +1,217 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class ResourceManager : MonoBehaviour
 {
-    // Resource storage using enum instead of strings
     public Dictionary<ResourceType, float> resources = new Dictionary<ResourceType, float>();
 
-    // Inspector display values
     public float souls;
     public float gold;
+    public float combatPower;
+    public float trueSouls;
+    public float lives;
 
-    // Passive income
-    public float passiveSouls = 0;
-    public float passiveGold = 0.5f;
-
-    // Upgrade system
+    public List<Generator> generators = new List<Generator>();
     public List<Upgrade> upgrades = new List<Upgrade>();
 
     float timer = 0f;
 
     void Start()
     {
-        // Initialize resources
         resources[ResourceType.Souls] = 0;
         resources[ResourceType.Gold] = 0;
+        resources[ResourceType.CombatPower] = 10;
+        resources[ResourceType.TrueSoul] = 0;
+        resources[ResourceType.Lives] = 3;
 
-        // Create upgrades
-        upgrades.Add(new Upgrade(
-            "Soul Echo",
-            10,
-            1,
-            new UpgradeEffect(ResourceType.Souls, 1)
-        ));
+        generators.Add(new GoldMine());
 
-        upgrades.Add(new Upgrade(
-            "Sword Spirit",
-            25,
-            1,
-            new UpgradeEffect(ResourceType.Gold, 1)
-        ));
-
-        Debug.Log("Resource Manager Started");
+        Debug.Log("Game Started");
     }
 
     void Update()
     {
-        // Click anywhere to gain Souls
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             AddResource(ResourceType.Souls, 1);
         }
 
-        // Passive income timer
         timer += Time.deltaTime;
 
         if (timer >= 1f)
         {
-            AddResource(ResourceType.Souls, passiveSouls);
-            AddResource(ResourceType.Gold, passiveGold);
+            foreach (var gen in generators)
+            {
+                float value = resources[gen.resourceType];
+                gen.Produce(ref value);
+                resources[gen.resourceType] = value;
+            }
+
             timer = 0f;
         }
 
-        // Sync values to Inspector (no decimals)
         souls = Mathf.FloorToInt(resources[ResourceType.Souls]);
         gold = Mathf.FloorToInt(resources[ResourceType.Gold]);
+        combatPower = Mathf.FloorToInt(resources[ResourceType.CombatPower]);
+        trueSouls = Mathf.FloorToInt(resources[ResourceType.TrueSoul]);
+        lives = Mathf.FloorToInt(resources[ResourceType.Lives]);
     }
 
     public void AddResource(ResourceType type, float amount)
     {
-        if (resources.ContainsKey(type))
+        resources[type] += amount;
+    }
+
+    // =========================
+    // SHOP
+    // =========================
+    public void BuyLife()
+    {
+        if (resources[ResourceType.Gold] >= 5000 && resources[ResourceType.Lives] < 3)
         {
-            resources[type] += amount;
-            Debug.Log(type + " = " + resources[type]);
+            resources[ResourceType.Gold] -= 5000;
+            resources[ResourceType.Lives] += 1;
         }
     }
 
-    public void BuyUpgrade(int index)
+    public void BuyCombatPower()
     {
-        if (index >= upgrades.Count) return;
+        if (resources[ResourceType.Souls] >= 10)
+        {
+            resources[ResourceType.Souls] -= 10;
+            resources[ResourceType.CombatPower] += 1;
+        }
+    }
+
+    // =========================
+    // UPGRADE SYSTEM (FIX)
+    // =========================
+    public bool BuyUpgrade(int index, out string message)
+    {
+        message = "";
+
+        if (index >= upgrades.Count)
+        {
+            message = "Invalid upgrade";
+            return false;
+        }
 
         Upgrade u = upgrades[index];
         float cost = u.GetCost();
 
-        if (resources[u.costResource] >= cost)
+        if (resources[u.costResource] < cost)
         {
-            resources[u.costResource] -= cost;
-
-            ApplyUpgradeEffect(u);
-
-            u.level++;
-            u.state = UpgradeState.Purchased;
-
-            Debug.Log("Purchased " + u.name);
+            message = "Not enough " + u.costResource;
+            return false;
         }
-        else
-        {
-            Debug.Log("Not enough " + u.costResource);
-        }
+
+        // Pay cost
+        resources[u.costResource] -= cost;
+
+        // Apply effect (simple version)
+        ApplyUpgradeEffect(u);
+
+        u.level++;
+        u.state = UpgradeState.Purchased;
+
+        message = "Purchased " + u.name;
+        return true;
     }
 
     void ApplyUpgradeEffect(Upgrade upgrade)
     {
         if (upgrade.effect.targetResource == ResourceType.Souls)
         {
-            passiveSouls += upgrade.effect.multiplier;
+            generators.Add(new SoulWell(upgrade.effect.multiplier));
         }
 
         if (upgrade.effect.targetResource == ResourceType.Gold)
         {
-            passiveGold += upgrade.effect.multiplier;
+            generators.Add(new GoldMine(upgrade.effect.multiplier));
         }
+    }
+
+    // =========================
+    // COMBAT
+    // =========================
+    int enemyLevel = 1;
+
+    public void StartFight()
+    {
+        int roll = Random.Range(1, 21); // player only
+
+        float playerPower = resources[ResourceType.CombatPower] * roll;
+
+        float enemyPower = Mathf.Pow(1.5f, enemyLevel) * 10;
+
+        Debug.Log("Player: " + playerPower + " Enemy: " + enemyPower);
+
+        if (playerPower >= enemyPower)
+        {
+            Debug.Log("WIN");
+
+            resources[ResourceType.TrueSoul] += 1;
+
+            enemyLevel++; // exponential scaling
+
+            if (resources[ResourceType.TrueSoul] >= 10)
+            {
+                FightDragon();
+            }
+        }
+        else
+        {
+            Debug.Log("LOSE");
+
+            resources[ResourceType.Lives] -= 1;
+
+            if (resources[ResourceType.Lives] <= 0)
+            {
+                GameOver();
+            }
+        }
+    }
+
+    int RollDice()
+    {
+        return Random.Range(1, 21); // 1–20
+    }
+
+    bool dragonAttempted = false;
+
+    void FightDragon()
+    {
+        if (dragonAttempted) return;
+
+        dragonAttempted = true;
+
+        float player = resources[ResourceType.CombatPower] * Random.Range(1, 21);
+        float dragon = 500;
+
+        if (player >= dragon)
+        {
+            Debug.Log("YOU BEAT THE DRAGON (TRUE END)");
+        }
+        else
+        {
+            Debug.Log("DRAGON DEFEATED YOU");
+        }
+
+        GameOver();
+    }
+
+    void GameOver()
+    {
+        Debug.Log("GAME OVER");
+
+        resources[ResourceType.Souls] = 0;
+        resources[ResourceType.Gold] = 0;
+        resources[ResourceType.CombatPower] = 10;
+        resources[ResourceType.TrueSoul] = 0;
+        resources[ResourceType.Lives] = 3;
+
+        generators.Clear();
+        generators.Add(new GoldMine());
     }
 }

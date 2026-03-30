@@ -10,6 +10,8 @@ public class ResourceUI : MonoBehaviour
     {
         resourceText.text =
             "Souls: " + Mathf.FloorToInt(resourceManager.souls) +
-            "\nGold: " + Mathf.FloorToInt(resourceManager.gold);
+            "\nGold: " + Mathf.FloorToInt(resourceManager.gold) +
+            "\nCombat: " + Mathf.FloorToInt(resourceManager.combatPower) +
+            "\nLives: " + Mathf.FloorToInt(resourceManager.lives);
     }
 }

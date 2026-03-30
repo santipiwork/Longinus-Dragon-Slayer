@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 [Serializable]
@@ -10,21 +10,23 @@ public class Upgrade
 
     public UpgradeState state;
 
-    public ResourceType costResource;
+    public ResourceType costResource; // NEW
 
     public UpgradeEffect effect;
 
     public int level;
 
-    public Upgrade(string name, float cost, int tier, UpgradeEffect effect)
+    // ✅ Updated constructor (5 parameters)
+    public Upgrade(string name, float cost, int tier, ResourceType costResource, UpgradeEffect effect)
     {
         this.name = name;
         this.baseCost = cost;
         this.tier = tier;
+        this.costResource = costResource;
         this.effect = effect;
 
-        state = UpgradeState.Available;
         level = 0;
+        state = UpgradeState.Available;
     }
 
     public float GetCost()

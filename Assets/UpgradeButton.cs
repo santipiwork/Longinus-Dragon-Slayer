@@ -14,12 +14,15 @@ public class UpgradeButton : MonoBehaviour
 
         buttonText.text =
             u.name +
-            "\nCost: " + u.GetCost().ToString("F0") +
+            "\nCost: " + Mathf.FloorToInt(u.GetCost()) + " " + u.costResource +
             "\nLevel: " + u.level;
     }
 
     public void Buy()
     {
-        manager.BuyUpgrade(upgradeIndex);
+        string message;
+        bool success = manager.BuyUpgrade(upgradeIndex, out message);
+
+        Debug.Log(message);
     }
 }
