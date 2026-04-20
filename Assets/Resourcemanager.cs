@@ -1,9 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class ResourceManager : MonoBehaviour
 {
+    // =========================
+    // RESOURCES
+    // =========================
     public Dictionary<ResourceType, float> resources = new Dictionary<ResourceType, float>();
 
     public float souls;
@@ -12,31 +16,49 @@ public class ResourceManager : MonoBehaviour
     public float trueSouls;
     public float lives;
 
+    // =========================
+    // SYSTEMS
+    // =========================
     public List<Generator> generators = new List<Generator>();
     public List<Upgrade> upgrades = new List<Upgrade>();
 
     float timer = 0f;
+    int enemyLevel = 1;
+    bool dragonAttempted = false;
+
+    // =========================
+    // EVENT SYSTEM
+    // =========================
+    public delegate void ResourceChangedHandler();
+    public event ResourceChangedHandler OnResourcesChanged;
 
     void Start()
     {
+        // Starting resources
         resources[ResourceType.Souls] = 0;
         resources[ResourceType.Gold] = 0;
         resources[ResourceType.CombatPower] = 10;
         resources[ResourceType.TrueSoul] = 0;
         resources[ResourceType.Lives] = 3;
 
+        // Starting generator
         generators.Add(new GoldMine());
+
+        UpdateInspectorValues();
+        FireResourceEvent();
 
         Debug.Log("Game Started");
     }
 
     void Update()
     {
+        // Click anywhere = gain souls
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             AddResource(ResourceType.Souls, 1);
         }
 
+        // Passive generator loop
         timer += Time.deltaTime;
 
         if (timer >= 1f)
@@ -44,13 +66,30 @@ public class ResourceManager : MonoBehaviour
             foreach (var gen in generators)
             {
                 float value = resources[gen.resourceType];
-                gen.Produce(ref value);
+                gen.Produce(ref value); // ref parameter requirement
                 resources[gen.resourceType] = value;
             }
 
+            UpdateInspectorValues();
+            FireResourceEvent();
+
             timer = 0f;
         }
+    }
 
+    // =========================
+    // RESOURCE METHODS
+    // =========================
+    public void AddResource(ResourceType type, float amount)
+    {
+        resources[type] += amount;
+
+        UpdateInspectorValues();
+        FireResourceEvent();
+    }
+
+    void UpdateInspectorValues()
+    {
         souls = Mathf.FloorToInt(resources[ResourceType.Souls]);
         gold = Mathf.FloorToInt(resources[ResourceType.Gold]);
         combatPower = Mathf.FloorToInt(resources[ResourceType.CombatPower]);
@@ -58,9 +97,9 @@ public class ResourceManager : MonoBehaviour
         lives = Mathf.FloorToInt(resources[ResourceType.Lives]);
     }
 
-    public void AddResource(ResourceType type, float amount)
+    void FireResourceEvent()
     {
-        resources[type] += amount;
+        OnResourcesChanged?.Invoke();
     }
 
     // =========================
@@ -68,10 +107,14 @@ public class ResourceManager : MonoBehaviour
     // =========================
     public void BuyLife()
     {
-        if (resources[ResourceType.Gold] >= 5000 && resources[ResourceType.Lives] < 3)
+        if (resources[ResourceType.Gold] >= 5000 &&
+            resources[ResourceType.Lives] < 3)
         {
             resources[ResourceType.Gold] -= 5000;
             resources[ResourceType.Lives] += 1;
+
+            UpdateInspectorValues();
+            FireResourceEvent();
         }
     }
 
@@ -81,42 +124,57 @@ public class ResourceManager : MonoBehaviour
         {
             resources[ResourceType.Souls] -= 10;
             resources[ResourceType.CombatPower] += 1;
+
+            UpdateInspectorValues();
+            FireResourceEvent();
         }
     }
 
     // =========================
-    // UPGRADE SYSTEM (FIX)
+    // UPGRADE SYSTEM
     // =========================
     public bool BuyUpgrade(int index, out string message)
     {
         message = "";
 
-        if (index >= upgrades.Count)
+        try
         {
-            message = "Invalid upgrade";
+            if (index < 0 || index >= upgrades.Count)
+            {
+                message = "Invalid upgrade";
+                return false;
+            }
+
+            Upgrade u = upgrades[index];
+            float cost = u.GetCost();
+
+            if (resources[u.costResource] < cost)
+            {
+                message = "Not enough " + u.costResource;
+                return false;
+            }
+
+            // Pay cost
+            resources[u.costResource] -= cost;
+
+            // Apply effect
+            ApplyUpgradeEffect(u);
+
+            u.level++;
+            u.state = UpgradeState.Purchased;
+
+            UpdateInspectorValues();
+            FireResourceEvent();
+
+            message = "Purchased " + u.name;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            message = "Upgrade failed: " + ex.Message;
+            Debug.LogError(message);
             return false;
         }
-
-        Upgrade u = upgrades[index];
-        float cost = u.GetCost();
-
-        if (resources[u.costResource] < cost)
-        {
-            message = "Not enough " + u.costResource;
-            return false;
-        }
-
-        // Pay cost
-        resources[u.costResource] -= cost;
-
-        // Apply effect (simple version)
-        ApplyUpgradeEffect(u);
-
-        u.level++;
-        u.state = UpgradeState.Purchased;
-
-        message = "Purchased " + u.name;
-        return true;
     }
 
     void ApplyUpgradeEffect(Upgrade upgrade)
@@ -135,25 +193,25 @@ public class ResourceManager : MonoBehaviour
     // =========================
     // COMBAT
     // =========================
-    int enemyLevel = 1;
-
     public void StartFight()
     {
-        int roll = Random.Range(1, 21); // player only
+        int roll = UnityEngine.Random.Range(1, 21);
 
-        float playerPower = resources[ResourceType.CombatPower] * roll;
+        float playerPower =
+            resources[ResourceType.CombatPower] * roll;
 
-        float enemyPower = Mathf.Pow(1.5f, enemyLevel) * 10;
+        float enemyPower =
+            Mathf.Pow(1.5f, enemyLevel) * 10;
 
-        Debug.Log("Player: " + playerPower + " Enemy: " + enemyPower);
+        Debug.Log("Player: " + playerPower +
+                  " Enemy: " + enemyPower);
 
         if (playerPower >= enemyPower)
         {
             Debug.Log("WIN");
 
             resources[ResourceType.TrueSoul] += 1;
-
-            enemyLevel++; // exponential scaling
+            enemyLevel++;
 
             if (resources[ResourceType.TrueSoul] >= 10)
             {
@@ -171,14 +229,10 @@ public class ResourceManager : MonoBehaviour
                 GameOver();
             }
         }
-    }
 
-    int RollDice()
-    {
-        return Random.Range(1, 21); // 1–20
+        UpdateInspectorValues();
+        FireResourceEvent();
     }
-
-    bool dragonAttempted = false;
 
     void FightDragon()
     {
@@ -186,7 +240,10 @@ public class ResourceManager : MonoBehaviour
 
         dragonAttempted = true;
 
-        float player = resources[ResourceType.CombatPower] * Random.Range(1, 21);
+        float player =
+            resources[ResourceType.CombatPower] *
+            UnityEngine.Random.Range(1, 21);
+
         float dragon = 500;
 
         if (player >= dragon)
@@ -201,6 +258,9 @@ public class ResourceManager : MonoBehaviour
         GameOver();
     }
 
+    // =========================
+    // RESET
+    // =========================
     void GameOver()
     {
         Debug.Log("GAME OVER");
@@ -211,7 +271,13 @@ public class ResourceManager : MonoBehaviour
         resources[ResourceType.TrueSoul] = 0;
         resources[ResourceType.Lives] = 3;
 
+        enemyLevel = 1;
+        dragonAttempted = false;
+
         generators.Clear();
         generators.Add(new GoldMine());
+
+        UpdateInspectorValues();
+        FireResourceEvent();
     }
 }
