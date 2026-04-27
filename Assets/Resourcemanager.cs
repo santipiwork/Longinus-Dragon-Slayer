@@ -15,6 +15,7 @@ public class ResourceManager : MonoBehaviour
     public float combatPower;
     public float trueSouls;
     public float lives;
+    public int rerollCost = 100;
 
     // =========================
     // SYSTEMS
@@ -107,10 +108,10 @@ public class ResourceManager : MonoBehaviour
     // =========================
     public void BuyLife()
     {
-        if (resources[ResourceType.Gold] >= 5000 &&
+        if (resources[ResourceType.Gold] >= 500 &&
             resources[ResourceType.Lives] < 3)
         {
-            resources[ResourceType.Gold] -= 5000;
+            resources[ResourceType.Gold] -= 500;
             resources[ResourceType.Lives] += 1;
 
             UpdateInspectorValues();
@@ -124,6 +125,36 @@ public class ResourceManager : MonoBehaviour
         {
             resources[ResourceType.Souls] -= 10;
             resources[ResourceType.CombatPower] += 1;
+
+            UpdateInspectorValues();
+            FireResourceEvent();
+        }
+    }
+
+    public void BuyCombatPowerAmount(int amount)
+    {
+        int costPer = 10;
+
+        int totalCost = amount * costPer;
+
+        if (resources[ResourceType.Souls] >= totalCost)
+        {
+            resources[ResourceType.Souls] -= totalCost;
+            resources[ResourceType.CombatPower] += amount;
+
+            UpdateInspectorValues();
+            FireResourceEvent();
+        }
+    }
+
+    public void ReRollDice()
+    {
+        if (resources[ResourceType.Gold] >= rerollCost)
+        {
+            resources[ResourceType.Gold] -= rerollCost;
+
+            hasRolled = false;
+            RollDice();
 
             UpdateInspectorValues();
             FireResourceEvent();
@@ -193,25 +224,64 @@ public class ResourceManager : MonoBehaviour
     // =========================
     // COMBAT
     // =========================
+
+    int currentRoll = 10;
+    bool hasRolled = false;
+
+    public void RollDice()
+    {
+        if (hasRolled) return;
+
+        currentRoll = UnityEngine.Random.Range(1, 21);
+        hasRolled = true;
+
+        float multiplier = GetRollMultiplier(currentRoll);
+
+        float rolledCombat =
+            resources[ResourceType.CombatPower] * multiplier;
+
+        CombatUI ui = FindObjectOfType<CombatUI>();
+
+        if (ui != null)
+        {
+            ui.ShowRoll(currentRoll);
+            ui.ShowCurrentCombat(rolledCombat);
+        }
+
+        Debug.Log("Rolled: " + currentRoll);
+    }
+
     public void StartFight()
     {
-        int roll = UnityEngine.Random.Range(1, 21);
+        int roll;
+
+        // If player never rolled, use base 10
+        if (hasRolled)
+            roll = currentRoll;
+        else
+            roll = 10;
+
+        float multiplier = GetRollMultiplier(roll);
 
         float playerPower =
-            resources[ResourceType.CombatPower] * roll;
+            resources[ResourceType.CombatPower] * multiplier;
 
-        float enemyPower =
-            Mathf.Pow(1.5f, enemyLevel) * 10;
+        float enemyPower = GetEnemyPower();
 
-        Debug.Log("Player: " + playerPower +
-                  " Enemy: " + enemyPower);
+        CombatUI ui = FindObjectOfType<CombatUI>();
+
+        Debug.Log("Roll: " + roll);
+        Debug.Log("Player: " + playerPower + " Enemy: " + enemyPower);
+
+
 
         if (playerPower >= enemyPower)
         {
-            Debug.Log("WIN");
-
             resources[ResourceType.TrueSoul] += 1;
             enemyLevel++;
+
+            if (ui != null)
+                ui.ShowResult("WIN");
 
             if (resources[ResourceType.TrueSoul] >= 10)
             {
@@ -220,9 +290,10 @@ public class ResourceManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("LOSE");
-
             resources[ResourceType.Lives] -= 1;
+
+            if (ui != null)
+                ui.ShowResult("LOSE");
 
             if (resources[ResourceType.Lives] <= 0)
             {
@@ -230,8 +301,33 @@ public class ResourceManager : MonoBehaviour
             }
         }
 
+        // Reset roll for next battle
+        currentRoll = 10;
+        hasRolled = false;
+
         UpdateInspectorValues();
         FireResourceEvent();
+
+        if (ui != null)
+        {
+            ui.ShowRoll(10);
+            ui.RefreshUI();
+        }
+    }
+
+    public float GetRollMultiplier(int roll)
+    {
+        // 1 = x0.5
+        // 10 = x1
+        // 20 = x2
+
+        if (roll == 10)
+            return 1f;
+
+        if (roll > 10)
+            return 1f + ((roll - 10) / 10f);
+
+        return 0.5f + ((roll - 1) / 18f) * 0.5f;
     }
 
     void FightDragon()
@@ -240,22 +336,41 @@ public class ResourceManager : MonoBehaviour
 
         dragonAttempted = true;
 
+        int roll = hasRolled ? currentRoll : 10;
+
         float player =
             resources[ResourceType.CombatPower] *
-            UnityEngine.Random.Range(1, 21);
+            GetRollMultiplier(roll);
 
         float dragon = 500;
 
+        CombatUI ui = FindObjectOfType<CombatUI>();
+
+        if (ui != null)
+            ui.ShowRoll(roll);
+
         if (player >= dragon)
         {
-            Debug.Log("YOU BEAT THE DRAGON (TRUE END)");
+            if (ui != null)
+                ui.ShowResult("TRUE END");
         }
         else
         {
-            Debug.Log("DRAGON DEFEATED YOU");
+            if (ui != null)
+                ui.ShowResult("DRAGON WINS");
         }
 
         GameOver();
+    }
+
+    public int GetEnemyLevel()
+    {
+        return enemyLevel;
+    }
+
+    public float GetEnemyPower()
+    {
+        return Mathf.Pow(1.5f, enemyLevel) * 10;
     }
 
     // =========================
