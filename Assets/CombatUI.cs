@@ -17,6 +17,8 @@ public class CombatUI : MonoBehaviour
     [Header("Dice")]
     public TMP_Text diceText;
 
+    string currentResult = "Ready";
+
     void OnEnable()
     {
         RefreshUI();
@@ -32,7 +34,6 @@ public class CombatUI : MonoBehaviour
         trueSoulsText.text =
             "True Souls: " + Mathf.FloorToInt(manager.trueSouls);
 
-        // Read current displayed roll from dice text
         int shownRoll = 10;
 
         if (diceText != null && diceText.text != "-")
@@ -48,12 +49,22 @@ public class CombatUI : MonoBehaviour
             "Current Combat: " +
             Mathf.RoundToInt(currentValue);
 
-        enemyNameText.text =
-            "Demon #" + manager.GetEnemyLevel();
+        if (manager.trueSouls >= 10)
+        {
+            enemyNameText.text = "Evil Dragon Kurosaki";
 
-        enemyPowerText.text =
-            "Enemy Combat: " +
-            Mathf.FloorToInt(manager.GetEnemyPower());
+            enemyPowerText.text =
+                "Enemy Combat: 1000";
+        }
+        else
+        {
+            enemyNameText.text =
+                "Demon #" + manager.GetEnemyLevel();
+
+            enemyPowerText.text =
+                "Enemy Combat: " +
+                Mathf.FloorToInt(manager.GetEnemyPower());
+        }
 
         if (diceText != null)
         {
@@ -63,7 +74,7 @@ public class CombatUI : MonoBehaviour
                 diceText.text = shownRoll.ToString();
         }
 
-        resultText.text = "Ready";
+        resultText.text = currentResult;
     }
 
     public void ShowRoll(int roll)
@@ -77,6 +88,9 @@ public class CombatUI : MonoBehaviour
         currentCombatText.text =
             "Current Combat: " +
             Mathf.RoundToInt(currentValue);
+
+        currentResult = "Ready";
+        resultText.text = currentResult;
     }
 
     public void ShowCurrentCombat(float value)
@@ -88,22 +102,7 @@ public class CombatUI : MonoBehaviour
 
     public void ShowResult(string text)
     {
-        resultText.text = text;
-
-        // Keep current combat accurate after fight
-        int shownRoll = 10;
-
-        if (diceText != null && diceText.text != "-")
-        {
-            int.TryParse(diceText.text, out shownRoll);
-        }
-
-        float currentValue =
-            manager.combatPower *
-            manager.GetRollMultiplier(shownRoll);
-
-        currentCombatText.text =
-            "Current Combat: " +
-            Mathf.RoundToInt(currentValue);
+        currentResult = text;
+        resultText.text = currentResult;
     }
 }

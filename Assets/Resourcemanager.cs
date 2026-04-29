@@ -27,6 +27,9 @@ public class ResourceManager : MonoBehaviour
     int enemyLevel = 1;
     bool dragonAttempted = false;
 
+    [Header("Win Screen")]
+    public GameObject winScreen;
+
     // =========================
     // EVENT SYSTEM
     // =========================
@@ -253,13 +256,16 @@ public class ResourceManager : MonoBehaviour
 
     public void StartFight()
     {
-        int roll;
+        CombatUI ui = FindObjectOfType<CombatUI>();
 
-        // If player never rolled, use base 10
-        if (hasRolled)
-            roll = currentRoll;
-        else
-            roll = 10;
+        // If player has 10 True Souls, this fight is the dragon
+        if (resources[ResourceType.TrueSoul] >= 10)
+        {
+            FightDragon();
+            return;
+        }
+
+        int roll = hasRolled ? currentRoll : 10;
 
         float multiplier = GetRollMultiplier(roll);
 
@@ -268,12 +274,8 @@ public class ResourceManager : MonoBehaviour
 
         float enemyPower = GetEnemyPower();
 
-        CombatUI ui = FindObjectOfType<CombatUI>();
-
         Debug.Log("Roll: " + roll);
         Debug.Log("Player: " + playerPower + " Enemy: " + enemyPower);
-
-
 
         if (playerPower >= enemyPower)
         {
@@ -282,11 +284,6 @@ public class ResourceManager : MonoBehaviour
 
             if (ui != null)
                 ui.ShowResult("WIN");
-
-            if (resources[ResourceType.TrueSoul] >= 10)
-            {
-                FightDragon();
-            }
         }
         else
         {
@@ -298,10 +295,11 @@ public class ResourceManager : MonoBehaviour
             if (resources[ResourceType.Lives] <= 0)
             {
                 GameOver();
+                return;
             }
         }
 
-        // Reset roll for next battle
+        // Reset roll after normal battle
         currentRoll = 10;
         hasRolled = false;
 
@@ -342,23 +340,27 @@ public class ResourceManager : MonoBehaviour
             resources[ResourceType.CombatPower] *
             GetRollMultiplier(roll);
 
-        float dragon = 500;
+        float dragon = 1000f;
 
         CombatUI ui = FindObjectOfType<CombatUI>();
 
         if (ui != null)
+        {
             ui.ShowRoll(roll);
+            ui.ShowResult("Kurosaki Appears!");
+        }
 
         if (player >= dragon)
         {
             if (ui != null)
-                ui.ShowResult("TRUE END");
+                ui.ShowResult("KUROSAKI DEFEATED!");
+
+            ShowWinScreen();
+            return;
         }
-        else
-        {
-            if (ui != null)
-                ui.ShowResult("DRAGON WINS");
-        }
+
+        if (ui != null)
+            ui.ShowResult("KUROSAKI WINS");
 
         GameOver();
     }
@@ -380,19 +382,39 @@ public class ResourceManager : MonoBehaviour
     {
         Debug.Log("GAME OVER");
 
+        // Reset resources
         resources[ResourceType.Souls] = 0;
         resources[ResourceType.Gold] = 0;
         resources[ResourceType.CombatPower] = 10;
         resources[ResourceType.TrueSoul] = 0;
         resources[ResourceType.Lives] = 3;
 
+        // Reset enemy progress
         enemyLevel = 1;
         dragonAttempted = false;
 
+        // Reset generators
         generators.Clear();
         generators.Add(new GoldMine());
 
+        // Reset upgrades
+        for (int i = 0; i < upgrades.Count; i++)
+        {
+            upgrades[i].level = 0;
+            upgrades[i].state = UpgradeState.Available;
+        }
+
         UpdateInspectorValues();
         FireResourceEvent();
+    }
+
+    void ShowWinScreen()
+    {
+        if (winScreen != null)
+        {
+            winScreen.SetActive(true);
+        }
+
+        Time.timeScale = 0f;
     }
 }
